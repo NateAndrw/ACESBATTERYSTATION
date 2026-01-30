@@ -1,0 +1,107 @@
+// PROJECT  : ACES BATTERY STATION
+// PURPOSE  : CHARGING AA BATTERY
+// COURSE   : ISC4U-E
+// AUTHOR   : N. ANDREW
+// DATE     : 2026-1-21
+// MCU      : ATmega328P
+// STATUS   : Working
+
+#include <LiquidCrystal.h>
+
+//LCD
+LiquidCrystal lcd(7, 8, 9, 10, 11, 12);
+
+//PINS
+const int RED_LED    = 6;
+const int YELLOW_LED = 5;
+const int GREEN_LED  = 4;
+
+const int FASTCHG_PIN = 3;
+const int BATT_ADC    = A0;
+
+//CONSTANATS
+const float ADC_REF = 5.0;
+const float DIVIDER_RATIO = 2.0;   // 10k / 10k
+
+unsigned long lastBlink = 0;
+bool blinkState = false;
+
+void setup() {
+  Serial.begin(9600);
+
+  pinMode(RED_LED, OUTPUT);
+  pinMode(YELLOW_LED, OUTPUT);
+  pinMode(GREEN_LED, OUTPUT);
+
+  pinMode(FASTCHG_PIN, INPUT_PULLUP);
+
+  lcd.begin(16, 2);
+  lcd.clear();
+
+  Serial.println(F("=== AA NiMH SMART CHARGER ==="));
+}
+
+void loop() {
+//READ
+  int raw = analogRead(BATT_ADC);
+  float adcV = (raw * ADC_REF) / 1023.0;
+  float battV = adcV * DIVIDER_RATIO;
+
+ //STATE
+  bool charging = (digitalRead(FASTCHG_PIN) == LOW);
+  bool noBattery = battV < 0.50;
+  bool veryLow   = battV < 1.05;
+
+//BLINK
+  if (millis() - lastBlink > 500) {
+    blinkState = !blinkState;
+    lastBlink = millis();
+  }
+
+//LED LOGIC
+  digitalWrite(RED_LED, LOW);
+  digitalWrite(YELLOW_LED, LOW);
+  digitalWrite(GREEN_LED, LOW);
+
+  if (noBattery || veryLow) {
+    digitalWrite(RED_LED, HIGH);
+  }
+  else if (charging) {
+    digitalWrite(YELLOW_LED, blinkState);
+  }
+  else {
+    digitalWrite(GREEN_LED, blinkState);
+  }
+
+//LCD
+  lcd.setCursor(0, 0);
+  lcd.print("Batt: ");
+  lcd.print(battV, 2);
+  lcd.print(" V   ");
+
+  lcd.setCursor(0, 1);
+  if (noBattery) {
+    lcd.print("No Battery      ");
+  }
+  else if (charging) {
+    lcd.print("Charging...     ");
+  }
+  else if (battV >= 1.30) {
+    lcd.print("Charged/Standby ");
+  }
+  else {
+    lcd.print("Monitoring      ");
+  }
+
+//DEBUG
+  Serial.print(F("[ADC] Raw: "));
+  Serial.print(raw);
+  Serial.print(F(" | ADC V: "));
+  Serial.print(adcV, 3);
+  Serial.print(F(" V | Batt V: "));
+  Serial.print(battV, 3);
+  Serial.print(F(" V | FASTCHG: "));
+  Serial.println(charging ? F("LOW (Charging)") : F("HIGH (Idle/Done)"));
+
+  delay(500);
+}
